@@ -41,17 +41,25 @@ if __name__ == "__main__":
     while iprog < len(prog):
 
         if prog[iprog] == "+":
-            if imem not in range(args.memsize) or mem[imem] == 255:
+            if imem not in range(args.memsize):
                 throw(prog[iprog], iprog, "Memory error", mem)
-            mem[imem] += 1
+
+            if mem[imem] == 255:
+                mem[imem] = 0
+            else:
+                mem[imem] += 1
 
             if args.dump:
                 dumpMem(fdump, mem)
 
         elif prog[iprog] == "-":
-            if imem not in range(args.memsize) or mem[imem] == 0:
+            if imem not in range(args.memsize):
                 throw(prog[iprog], iprog, "Memory error", mem)
-            mem[imem] -= 1
+
+            if mem[imem] == 0:
+                mem[imem] = 255
+            else:
+                mem[imem] -= 1
             
             if args.dump:
                 dumpMem(fdump, mem)
