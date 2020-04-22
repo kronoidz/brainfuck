@@ -1,120 +1,158 @@
 #!/usr/bin/env python3
 
-# Simple brainfuck interpreter by kronoidz
+# Simple brainfuck interpreter
 # -h for help
 
-from sys import stdin, stdout, stderr
-from argparse import ArgumentParser
+# TODO: TEST INPUT
 
-def dumpMem(f, mem=None):
-    if mem:
-        print("Memory: {}".format([int(i) for i in mem]), file=f)
+import sys
+import argparse
 
-def throw(instruction, iprog, message, mem=None):
-    print("\n\nException on instruction {} at {}: {}".format(instruction, iprog, message),
-        file=stderr)
-    dumpMem(stderr, mem)
-    exit(1)
+class ProgramException(Exception):
+
+    def __init__(self, operation, line, message):
+        s = "\n\nException on operation '{}' at line {}: {}"
+        s = s.format(operation, line, message)
+
+        super().__init__(s)
+
+        self.operation = operation
+        self.line = line
+        self.message = message
+
+class BrainfuckInterpreter:
+
+    def __init__(self, program, memsize, wordsize, wrap):
+        self.program = program
+        self.pc = 0
+        self.pointer = 0
+        self.memory = [0] * memsize
+        self.wordsize = wordsize
+        self.wordmax = (2 ** wordsize) - 1
+        self.operation = "\0"
+        self.wrap = wrap
+        self.line = 0
+        self.close = False
+    
+    def checkmem(self):
+        if self.pointer < 0 or self.pointer >= len(self.memory):
+            raise ProgramException(self.operation, self.line, "Memory error")
+    
+    def increment(self):
+        self.checkmem()
+
+        if self.memory[self.pointer] == self.wordmax:
+            self.memory[self.pointer] = -1
+
+        self.memory[self.pointer] += 1
+    
+    def decrement(self):
+        self.checkmem()
+
+        if self.memory[self.pointer] == 0:
+            self.memory[self.pointer] = self.wordmax
+        else:
+            self.memory[self.pointer] -= 1
+    
+    def advance(self):
+        self.pointer += 1
+
+        if self.wrap and self.pointer >= len(self.memory):
+            self.pointer = 0
+    
+    def retreat(self):
+        self.pointer -= 1
+
+        if self.wrap and self.pointer < 0:
+            self.pointer = len(self.memory) - 1
+    
+    def start_test(self):
+        self.checkmem()
+
+        if self.memory[self.pointer] == 0:
+            # Jump to corresponding "]"
+            level = 1
+            while level > 0:
+                self.pc += 1
+                if self.pc >= len(self.program):
+                    self.close = True
+                else:
+                    op = self.program[self.pc]
+                    if op == "[":
+                        level += 1
+                    elif op == "]":
+                        level -= 1
+    
+    def end_test(self):
+        self.checkmem()
+
+        if self.memory[self.pointer] != 0:
+            # Jump to corresponding "["
+            level = 1
+            while level > 0:
+                self.pc -= 1
+                if self.pc < 0:
+                    self.close = True
+                else:
+                    op = self.program[self.pc]
+                    if op == "]":
+                        level += 1
+                    elif op == "[":
+                        level -= 1
+    
+    def output(self):
+        self.checkmem()
+        sys.stdout.write(chr(self.memory[self.pointer]))
+        sys.stdout.flush()
+    
+    def input(self):
+        self.checkmem()
+        i = sys.stdin.buffer.read(1)
+        if i:
+            i = ord(i)
+            if i > self.wordmax:
+                raise ProgramException(self.operation, self.line,
+                    "Input provided does not fit in {}-bit cell: {}".format(self.wordsize, i))
+            self.memory[self.pointer] = i
+    
+    def run(self):
+        while not self.close:
+            self.pc += 1
+            if self.pc >= len(self.program):
+                break
+
+            self.operation = self.program[self.pc]
+            c = self.operation
+            
+            if   c == "+": self.increment()
+            elif c == "-": self.decrement()
+            elif c == ">": self.advance()
+            elif c == "<": self.retreat()
+            elif c == "[": self.start_test()
+            elif c == "]": self.end_test()
+            elif c == ".":
+                self.output()
+            elif c == ",": self.input()
+
 
 if __name__ == "__main__":
 
-    parser = ArgumentParser(description="Simple Brainfuck interpreter")
+    parser = argparse.ArgumentParser(description="Simple Brainfuck interpreter")
     parser.add_argument("program", type=str, help="program file")
-    parser.add_argument("memsize", type=int, help="memory size in bytes", default=512, nargs="?")
-    parser.add_argument("-d", "--dump", action="store_true", help="dump memory on a file after every access")
-    args = parser.parse_args()    
-    
-    # Create program memory
-    mem = bytearray(args.memsize)
-    imem = 0
+    parser.add_argument("-m", "--memsize", type=int, help="memory size in cells", default=512)
+    parser.add_argument("-c", "--cellwidth", type=int, help="cell size in bits", default=8)
+    parser.add_argument("-w", "--wrap", action="store_false", help="wrap memory")
+    args = parser.parse_args()
 
-    if args.dump:
-        fdump = open("dump.txt", "w")
-        dumpMem(fdump, mem)
+    if args.memsize < 0 or args.cellwidth < 0:
+        print("Invalid negative arguments", file=sys.stderr)
+        exit(1)
 
+    data = None
+
+    # Read program
     with open(args.program, "r") as ifile:
         data = ifile.read()
-
-    prog = "".join(c for c in data if c in ["+", "-", ">", "<", "[", "]", ",", "."])
-    iprog = 0
-
-    while iprog < len(prog):
-
-        if prog[iprog] == "+":
-            if imem not in range(args.memsize):
-                throw(prog[iprog], iprog, "Memory error", mem)
-
-            if mem[imem] == 255:
-                mem[imem] = 0
-            else:
-                mem[imem] += 1
-
-            if args.dump:
-                dumpMem(fdump, mem)
-
-        elif prog[iprog] == "-":
-            if imem not in range(args.memsize):
-                throw(prog[iprog], iprog, "Memory error", mem)
-
-            if mem[imem] == 0:
-                mem[imem] = 255
-            else:
-                mem[imem] -= 1
-            
-            if args.dump:
-                dumpMem(fdump, mem)
-
-        elif prog[iprog] == ">":
-            imem += 1
-
-        elif prog[iprog] == "<":
-            imem -= 1
-
-        elif prog[iprog] == ".":
-            stdout.buffer.write(bytes([mem[imem]]))
-            stdout.flush()
-
-        elif prog[iprog] == ",":
-            b = stdin.buffer.read(1)
-            if b:
-                mem[imem] = ord(b)
-            
-                if args.dump:
-                    dumpMem(fdump, mem)
-
-        elif prog[iprog] == "[" and mem[imem] == 0:
-            jprog = iprog
-            nest = 0
-            while True:
-                jprog += 1
-                if jprog >= len(prog):
-                    throw(prog[iprog], iprog, "Unbalanced []")
-                if prog[jprog] == "[":
-                    nest += 1
-                elif prog[jprog] == "]":
-                    if nest > 0:
-                        nest -= 1
-                    else:
-                        iprog = jprog
-                        break
-
-        elif prog[iprog] == "]" and mem[imem] != 0:
-            jprog = iprog
-            nest = 0
-            while True:
-                jprog -= 1
-                if jprog < 0:
-                    throw(prog[iprog], iprog, "Unbalanced []")
-                if prog[jprog] == "]":
-                    nest += 1
-                elif prog[jprog] == "[":
-                    if nest > 0:
-                        nest -= 1
-                    else:
-                        iprog = jprog
-                        break
-        
-        iprog += 1
     
-    if args.dump:
-        fdump.close()
+    interpreter = BrainfuckInterpreter(data, args.memsize, args.cellwidth, args.wrap)
+    interpreter.run()
