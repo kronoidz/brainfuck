@@ -141,7 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("program", type=str, help="program file")
     parser.add_argument("-m", "--memsize", type=int, help="memory size in cells", default=512)
     parser.add_argument("-c", "--cellwidth", type=int, help="cell size in bits", default=8)
-    parser.add_argument("-w", "--wrap", action="store_false", help="wrap memory")
+    parser.add_argument("-w", "--wrap", action="store_true", help="wrap memory")
     args = parser.parse_args()
 
     if args.memsize < 0 or args.cellwidth < 0:
