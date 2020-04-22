@@ -31,7 +31,7 @@ class BrainfuckInterpreter:
         self.wordmax = (2 ** wordsize) - 1
         self.operation = "\0"
         self.wrap = wrap
-        self.line = 0
+        self.line = 1
         self.close = False
     
     def checkmem(self):
@@ -133,6 +133,7 @@ class BrainfuckInterpreter:
             elif c == ".":
                 self.output()
             elif c == ",": self.input()
+            elif c == "\n": self.line += 1
 
 
 if __name__ == "__main__":
